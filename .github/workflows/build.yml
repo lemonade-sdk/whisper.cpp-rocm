@@ -648,12 +648,16 @@ jobs:
         run: cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
       # Copy Backend ROCm Folders ---
-      - name: Copy ROCm core libs to build directory
+      - name: Copy ROCm core and sysdep libs to build directory
         run: |
           build_bin_path="build/bin"
           rocm_bin_path="/opt/rocm/bin"
           rocm_lib_path="/opt/rocm/lib"
+          rocm_sysdeps_path="/opt/rocm/lib/rocm_sysdeps/lib"
           
+          # Ensure build directory exists
+          mkdir -p "$build_bin_path"
+
           # Copy rocblas/library folder
           rocblas_lib_path="$rocm_lib_path/rocblas/library"
           if [ -d "$rocblas_lib_path" ]; then
@@ -672,9 +676,8 @@ jobs:
             echo "Copied: hipblaslt/library"
           fi
  
-          # Copy required shared libraries
-          # We use generic wildcards to catch versioned .so files
-          echo "Copying shared libraries..."
+          # Copy standard ROCm shared libraries
+          echo "Copying core shared libraries..."
           cp -v $rocm_lib_path/libhipblas.so* "$build_bin_path/" 2>/dev/null || true
           cp -v $rocm_lib_path/librocblas.so* "$build_bin_path/" 2>/dev/null || true
           cp -v $rocm_lib_path/libamdhip64.so* "$build_bin_path/" 2>/dev/null || true
@@ -684,9 +687,15 @@ jobs:
           cp -v $rocm_lib_path/libamd_comgr.so* "$build_bin_path/" 2>/dev/null || true
           cp -v $rocm_lib_path/libhsa-runtime64.so* "$build_bin_path/" 2>/dev/null || true
           
-          # Copy LLVM runtime libs often needed
+          # Copy LLVM runtime libs
           cp -v $rocm_lib_path/llvm/lib/libLLVM.so* "$build_bin_path/" 2>/dev/null || true
           cp -v $rocm_lib_path/llvm/lib/libclang-cpp.so* "$build_bin_path/" 2>/dev/null || true
+
+          if [ -d "$rocm_sysdeps_path" ]; then
+            echo "Copying sysdep libraries from $rocm_sysdeps_path..."
+            # Using a broad wildcard ensures we grab elf.so.1, drm.so.2, numa.so.1, etc.
+            cp -v $rocm_sysdeps_path/librocm_sysdeps_*.so* "$build_bin_path/"
+          fi
 
       - name: Bundle Linked Libraries
         run: |
