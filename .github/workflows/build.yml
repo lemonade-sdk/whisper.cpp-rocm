@@ -2154,12 +2154,12 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Cleanup before run
-        uses: ./.github/actions/cleanup-processes-linux
-
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+
+      - name: Cleanup before run
+        uses: ./.github/actions/cleanup-processes-linux
 
       - name: Verify ROCm installation
         run: |
@@ -2204,12 +2204,12 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Cleanup before run
-        uses: ./.github/actions/cleanup-processes-windows
-
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+
+      - name: Cleanup before run
+        uses: ./.github/actions/cleanup-processes-windows
 
       - name: Verify ROCm installation
         shell: pwsh
