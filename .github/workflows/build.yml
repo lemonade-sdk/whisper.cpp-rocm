@@ -2148,3 +2148,114 @@ jobs:
         run: |
           vulkaninfo --summary
           GG_BUILD_VULKAN=1 bash ./ci/run.sh ~/results/whisper.cpp ~/mnt/whisper.cpp
+
+  # AMD ROCm GPU Testing (self-hosted runners)
+  test-rocm-linux:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gfx_target: gfx1151
+            runner: [stx-halo, Linux]
+          # Uncomment when runners are available:
+          # - gfx_target: gfx1100
+          #   runner: [navi31, Linux]
+          # - gfx_target: gfx1200
+          #   runner: [rdna4, Linux]
+          # - gfx_target: gfx1150
+          #   runner: [rai300_400, Linux]
+
+    concurrency:
+      group: rocm-test-linux-${{ matrix.gfx_target }}-${{ github.head_ref || github.run_id }}
+      cancel-in-progress: true
+
+    timeout-minutes: 120
+
+    steps:
+      - name: Cleanup before run
+        uses: ./.github/actions/cleanup-processes-linux
+
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Verify ROCm installation
+        run: |
+          echo "=== ROCm Environment ==="
+          rocm-smi || echo "rocm-smi not found"
+          rocminfo | head -40 || echo "rocminfo not found"
+          hipcc --version || echo "hipcc not found"
+          echo "=== GPU Info ==="
+          rocm-smi --showproductname 2>/dev/null || true
+
+      - name: Test
+        id: ggml-ci
+        run: |
+          GG_BUILD_ROCM=1 GG_BUILD_AMDGPU_TARGETS=${{ matrix.gfx_target }} GG_BUILD_LOW_PERF=1 \
+            bash ./ci/run.sh ~/results/whisper.cpp-rocm-${{ matrix.gfx_target }} /mnt/whisper.cpp
+
+      - name: Cleanup after run
+        if: always()
+        uses: ./.github/actions/cleanup-processes-linux
+
+  test-rocm-windows:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gfx_target: gfx1151
+            runner: [stx-halo, Windows]
+          # Uncomment when runners are available:
+          # - gfx_target: gfx1100
+          #   runner: [navi31, Windows]
+          # - gfx_target: gfx1200
+          #   runner: [rdna4, Windows]
+          # - gfx_target: gfx1150
+          #   runner: [rai300_400, Windows]
+
+    concurrency:
+      group: rocm-test-windows-${{ matrix.gfx_target }}-${{ github.head_ref || github.run_id }}
+      cancel-in-progress: true
+
+    timeout-minutes: 120
+
+    steps:
+      - name: Cleanup before run
+        uses: ./.github/actions/cleanup-processes-windows
+
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Verify ROCm installation
+        shell: pwsh
+        run: |
+          Write-Host "=== ROCm Environment ==="
+          & "$env:HIP_PATH\bin\rocm-smi.exe" 2>$null
+          & "$env:HIP_PATH\bin\hipcc.exe" --version 2>$null
+
+      - name: Configure ROCm environment
+        shell: pwsh
+        run: |
+          $rocmPath = $env:HIP_PATH
+          if (-not $rocmPath) { $rocmPath = "C:\opt\rocm" }
+          echo "HIP_PATH=$rocmPath" >> $env:GITHUB_ENV
+          echo "ROCM_PATH=$rocmPath" >> $env:GITHUB_ENV
+          echo "HIP_PLATFORM=amd" >> $env:GITHUB_ENV
+          echo "$rocmPath\bin" >> $env:GITHUB_PATH
+          echo "$rocmPath\lib\llvm\bin" >> $env:GITHUB_PATH
+
+      - name: Test
+        id: ggml-ci
+        shell: bash
+        run: |
+          GG_BUILD_ROCM=1 GG_BUILD_AMDGPU_TARGETS=${{ matrix.gfx_target }} GG_BUILD_LOW_PERF=1 \
+            bash ./ci/run.sh ~/results/whisper.cpp-rocm-${{ matrix.gfx_target }} /mnt/whisper.cpp
+
+      - name: Cleanup after run
+        if: always()
+        uses: ./.github/actions/cleanup-processes-windows
