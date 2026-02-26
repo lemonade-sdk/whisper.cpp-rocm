@@ -79,6 +79,12 @@ if [ ! -z ${GG_BUILD_ROCM} ]; then
     fi
 
     CMAKE_EXTRA="${CMAKE_EXTRA} -DAMDGPU_TARGETS=${GG_BUILD_AMDGPU_TARGETS}"
+
+    # Set HIP environment if not already set
+    export HIP_PLATFORM=${HIP_PLATFORM:-amd}
+    export ROCM_PATH=${ROCM_PATH:-/opt/rocm}
+    export HIP_PATH=${HIP_PATH:-/opt/rocm}
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DCMAKE_PREFIX_PATH=${ROCM_PATH} -DCMAKE_HIP_COMPILER=${ROCM_PATH}/lib/llvm/bin/clang++"
 fi
 
 if [ ! -z ${GG_BUILD_SYCL} ]; then
