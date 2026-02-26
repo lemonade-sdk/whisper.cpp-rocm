@@ -84,6 +84,7 @@ if [ ! -z ${GG_BUILD_ROCM} ]; then
     export HIP_PLATFORM=${HIP_PLATFORM:-amd}
     export ROCM_PATH=${ROCM_PATH:-/opt/rocm}
     export HIP_PATH=${HIP_PATH:-/opt/rocm}
+    export LD_LIBRARY_PATH=${ROCM_PATH}/lib:${LD_LIBRARY_PATH}
     CMAKE_EXTRA="${CMAKE_EXTRA} -DCMAKE_PREFIX_PATH=${ROCM_PATH} -DCMAKE_HIP_COMPILER=${ROCM_PATH}/lib/llvm/bin/clang++"
 fi
 
