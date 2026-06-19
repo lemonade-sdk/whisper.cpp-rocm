@@ -1320,7 +1320,7 @@ jobs:
               const existing = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                tag,
+                tag_name: tag,
               });
               const updated = await github.rest.repos.updateRelease({
                 ...params,
