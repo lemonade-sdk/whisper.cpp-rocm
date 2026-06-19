@@ -1327,14 +1327,14 @@ jobs:
                 release_id: existing.data.id,
               });
               core.info(`Updated existing release for ${tag} (${updated.data.id})`);
-              core.setOutput('id', String(updated.data.id));
+              return String(updated.data.id);
             } catch (error) {
               if (error.status !== 404) {
                 throw error;
               }
               const created = await github.rest.repos.createRelease(params);
               core.info(`Created release for ${tag} (${created.data.id})`);
-              core.setOutput('id', String(created.data.id));
+              return String(created.data.id);
             }
 
       - name: Upload release assets
@@ -1344,7 +1344,7 @@ jobs:
           script: |
             const fs   = require('fs');
             const path = require('path');
-            const id   = '${{ steps.create_release.outputs.id }}';
+            const id   = '${{ steps.create_release.outputs.result }}';
             for (const file of fs.readdirSync('./release')) {
               if (!file.endsWith('.zip') && !file.endsWith('.tar.gz')) continue;
               console.log('Uploading:', file);
