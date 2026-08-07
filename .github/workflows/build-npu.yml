@@ -1,4 +1,4 @@
-name: NPU Build (Windows + Linux)
+name: NPU Build (Windows)
 
 on:
   workflow_dispatch:
@@ -7,9 +7,8 @@ permissions:
   contents: read
 
 env:
-  BRANCH_NAME:      ${{ github.head_ref || github.ref_name }}
-  FLEXML_WIN_URL:   "https://github.com/lemonade-sdk/whisper.cpp/releases/download/deps/flexmlrt1.7.0-win.zip"
-  FLEXML_LINUX_URL: "https://github.com/lemonade-sdk/whisper.cpp-rocm/releases/download/deps/flexmlrt-1.8.0-linux.tar.gz"
+  BRANCH_NAME:    ${{ github.head_ref || github.ref_name }}
+  FLEXML_WIN_URL: "https://github.com/lemonade-sdk/whisper.cpp/releases/download/deps/flexmlrt1.7.0-win.zip"
 
 jobs:
 
@@ -50,14 +49,12 @@ jobs:
 # 1. NPU — Windows (self-hosted, RyzenAI runner)
 # ════════════════════════════════════════════════════════════════════════════════
   windows-npu:
-    runs-on: [self-hosted, Windows, stx-halo]
+    runs-on: [self-hosted, Windows, stx, rai300_400]
     needs: determine-tag
-    continue-on-error: false
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: microsoft/setup-msbuild@v2
 
       - name: Install CMake if not available
         shell: powershell
@@ -138,101 +135,6 @@ jobs:
           $mb = [math]::Round((Get-Item $a).Length/1MB,2)
           Write-Host "Package: $a ($mb MB)"
           "ARCHIVE=$a" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARCHIVE }}
-          path: ${{ env.ARCHIVE }}
-
-# ════════════════════════════════════════════════════════════════════════════════
-# 2. NPU — Linux (self-hosted, RyzenAI runner)
-# ════════════════════════════════════════════════════════════════════════════════
-  linux-npu:
-    runs-on: [self-hosted, Linux, stx-halo]
-    needs: determine-tag
-    continue-on-error: false
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download FlexML Runtime
-        run: |
-          curl -L --fail --retry 3 --retry-delay 5 -o flexmlrt.tar.gz "${{ env.FLEXML_LINUX_URL }}"
-          if [ ! -f flexmlrt.tar.gz ] || [ ! -s flexmlrt.tar.gz ]; then
-            echo "::error::flexmlrt.tar.gz download failed or empty"; exit 1
-          fi
-          echo "FlexML: $(du -sh flexmlrt.tar.gz | cut -f1) downloaded"
-
-      - name: Extract FlexML Runtime
-        run: |
-          tar xf flexmlrt.tar.gz
-          FLEXML_DIR=$(find . -maxdepth 1 -type d -name "flexmlrt*" | head -1)
-          if [ -z "$FLEXML_DIR" ]; then echo "::error::No flexmlrt directory found"; exit 1; fi
-          echo "Extracted: $FLEXML_DIR"
-
-      - name: Setup FlexML environment
-        run: |
-          source flexmlrt/setup.sh
-          echo "FlexmlRT_DIR=$PWD/flexmlrt/share/cmake/FlexmlRT" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$PWD/flexmlrt/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
-
-      - name: Configure CMake
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DWHISPER_VITISAI=ON \
-            -DWHISPER_BUILD_SERVER=ON
-
-      - name: Build
-        run: |
-          cmake --build build --config Release -j$(nproc) > build.log 2>&1
-          exit_code=$?
-          grep -E "error:|FAILED|Linking|Built target" build.log || true
-          if [ $exit_code -ne 0 ]; then
-            echo "--- Last 100 lines of build log ---"
-            tail -100 build.log
-            exit $exit_code
-          fi
-          echo "Build succeeded."
-
-      - name: Verify build output
-        run: |
-          if [ ! -f build/bin/whisper-cli ]; then
-            echo "::error::whisper-cli not found"
-            ls -lh build/bin/ 2>/dev/null || true
-            exit 1
-          fi
-          echo "Build output:"; ls -lh build/bin/whisper-cli
-          ldd build/bin/whisper-cli || true
-
-      - name: Copy FlexML shared libs
-        run: |
-          BIN="build/bin"
-          if [ -d flexmlrt/lib ]; then
-            find flexmlrt/lib -maxdepth 1 -name "*.so*" -exec cp -Pn {} "$BIN/" \; 2>/dev/null || true
-            echo "FlexML libs copied:"
-            ls -lh "$BIN"/*.so* 2>/dev/null || echo "(none)"
-          fi
-
-      - name: Set portable RPATH
-        run: |
-          command -v patchelf >/dev/null 2>&1 || { echo "::warning::patchelf not found, skipping RPATH patch"; exit 0; }
-          BIN="build/bin"
-          for f in "$BIN"/whisper-* "$BIN"/*.so*; do
-            [ -f "$f" ] && [ ! -L "$f" ] && file "$f" | grep -q ELF && \
-              patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true
-          done
-
-      - name: Package
-        run: |
-          VER="${{ needs.determine-tag.outputs.version }}"
-          ARCHIVE="whisper-${VER}-linux-npu-x64.tar.gz"
-          STAGE="whisper-${VER}-linux-npu-x64"
-          mkdir -p "$STAGE"
-          cp -r build/bin/* "$STAGE/"
-          tar -czf "$ARCHIVE" "$STAGE"
-          echo "Package: $ARCHIVE ($(du -sh $ARCHIVE | cut -f1))"
-          echo "ARCHIVE=$ARCHIVE" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         with:
